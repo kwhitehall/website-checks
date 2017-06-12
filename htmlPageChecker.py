@@ -223,6 +223,91 @@ class testHtmlPage(object):
 			self.f.write('%s has no img tags\n' %page)
 		
 		return allSources
+
+
+	def check_local_files_connect(self, page):
+		driver = self.driver
+		driver.implicitly_wait(2)
+		driver.get(page)
+		allATags = self.is_element_present('a')
+		self.f.write('--- checking references to local pages %s\n' %page)
+		allSources = True
+		
+		if allATags:
+			for ahref in allATags:
+				try:
+					location = ahref.get_attribute('href').encode('utf-8')
+					if not(location and location.strip()): 
+						print ahref,': a source is missing'
+						self.f.write('a source is missing. \n')
+						allSources = False
+					else:
+						if 'https://' in location or 'http://' in location or 'www.' in location or 'mailto' in location:
+							continue
+						else:
+							if '.html#' in location:
+								onlyFile = location.split('.html#')[0] + '.html'
+							elif '.htm#' in location:
+								onlyFile = location.split('.htm#')[0] + '.htm'
+							else:
+								onlyFile = location
+
+							if not (os.path.isfile((os.path.normpath(onlyFile)).split(':')[1])):
+								print ahref.get_attribute('href'),': a href file is missing'
+								self.f.write('%s :a href file is missing\n' %ahref.get_attribute('href'))
+								allSources = False			
+				except:
+					print 'a href file is missing. Please check!', ahref.get_attribute('href')	
+					self.f.write('%s a tag is missing href attribute. Please check!\n' %ahref)
+					allSources = False
+
+			if allSources == True:
+				print 'a href exists test cleared'
+				self.f.write('a href exists test cleared\n')
+		else:
+			print 'This page has no a tags'
+			self.f.write('%s has no a tags\n' %page)
+		
+		return allSources
+
+	def get_title(self, page):
+		driver = self.driver
+		driver.implicitly_wait(2)
+		driver.get(page)
+		titleTags = self.is_element_present('title')
+		title = ''
+
+		if titleTags:
+			title = driver.title
+
+		return title
+
+def check_titles(titles):
+	overlaps = []
+	log = os.getcwd()+'/htmlPageChecker.log'
+	f = open(log,'ab+')
+
+	print '--- checking the titles'
+	f.write('--- checking the titles \n')
+	
+	if len(titles) > 1:
+		c = 0
+		for i in titles:
+			currTitles = titles
+			currTitles.pop(c)
+			c += 1
+			for item in currTitles:
+				if i[0] in item[0]:
+					overlaps.append([i[0],i[1],item[1]])
+	if overlaps:
+		for o in overlaps:
+			print '"%s" title repeated in %s and %s' %(o[0], o[1], o[2])
+			f.write('--- "%s" title repeated in %s and %s' %(o[0], o[1], o[2]))
+	else:
+		print 'titles check passed'
+		f.write('titles check passed')
+	f.close()
+
 	
 def _usage():
 	print ('*')*80
@@ -246,6 +331,7 @@ def main(argv):
 	sloc = ''
 	baseUrl = ''
 	dictionary = [line.rstrip() for line in open('specialDict.txt')]
+	titles = []
 	
 	try:
 		opts, args = getopt.getopt(argv,"hpsw:")
@@ -256,9 +342,10 @@ def main(argv):
 					sys.exit()
 				elif opt in '-p':	
 					if '*' in arg:
+						print 'in if'
 						pages = [arg.split('*')[0]+'/'+i for i in os.listdir(arg.split('*')[0]) if 'html' in i]
 					else:
-						pages = [i for i in arg.split(',')]
+						pages = args 
 				elif opt in '-s':	
 					pages = [arg.split('*')[0]+'/'+i for i in os.listdir(arg.split('*')[0]) if 'html' in i]
 					sloc = arg
@@ -281,13 +368,21 @@ def main(argv):
 		for eachPage in pages:
 			print 'working on ',eachPage
 			t = testHtmlPage()
+			title = testHtmlPage.get_title(t, eachPage)
+			
+			if title:
+				titles.append((title, eachPage))
+
+			testHtmlPage.check_local_files_connect(t, eachPage)
 			testHtmlPage.check_images_exist(t, eachPage)
 			testHtmlPage.check_img_alt_tags(t, eachPage)
 			testHtmlPage.check_pdf_text(t, eachPage)
 			testHtmlPage.spell_checker(t, eachPage, dictionary)
 			testHtmlPage.tearDown(t)
-	
 
+		check_titles(titles)
+
+		
 if __name__ == "__main__":
 	main(sys.argv[1:])
 
